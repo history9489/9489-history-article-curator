@@ -60,8 +60,8 @@ def fetch_open_access_articles(query):
     return articles
 
 # --- UI LAYOUT ---
-st.title("📚 PTES History Modules & Worksheet Hub")
-st.write("Select your syllabus option to dynamically gather online readings and matching worksheets.")
+st.title("📚 History Materials")
+st.write("Select your topic category to gather online readings and worksheets.")
 
 # Sidebar Configuration
 st.sidebar.header("📋 Syllabus Filter")
@@ -83,7 +83,7 @@ st.markdown("---")
 
 # --- RESULTS DISPENSATION LOGIC ---
 if search_articles:
-    st.subheader(f"📖 Academic Articles & Previews for: *{search_keyword}*")
+    st.subheader(f"📖 Academic Materials for: *{search_keyword}*")
     with st.spinner("Scanning open archives..."):
         results = fetch_open_access_articles(search_keyword)
         
@@ -98,7 +98,7 @@ if search_articles:
             st.warning("No open-access summaries matching this precise subtopic were found. Try modifying the keywords above.")
 
 if search_worksheets:
-    st.subheader(f"🧩 Target Worksheets & Practice Packs for: *{search_keyword}*")
+    st.subheader(f"🧩 Target Worksheets for: *{search_keyword}*")
     
     # We construct automated search target links using safe redirects to save computing resources
     encoded_query = urllib.parse.quote(f"{search_keyword} history 9489 worksheet filetype:pdf OR quiz")
