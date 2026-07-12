@@ -4,7 +4,7 @@ import urllib.parse
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
-    page_title="History 9489 Article Curator",
+    page_title="PTES 9489 History Case Studies",
     page_icon="📚",
     layout="wide"
 )
@@ -60,8 +60,8 @@ def fetch_open_access_articles(query):
     return articles
 
 # --- UI LAYOUT ---
-st.title("📚 PTES History 9489 Article & Worksheet Portal")
-st.write("Welcome to the Article Curator. Select your syllabus option to dynamically gather online readings and matching worksheets.")
+st.title("📚 PTES History Modules & Worksheet Hub")
+st.write("Select your syllabus option to dynamically gather online readings and matching worksheets.")
 
 # Sidebar Configuration
 st.sidebar.header("📋 Syllabus Filter")
