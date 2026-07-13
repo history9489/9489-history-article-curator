@@ -11,10 +11,8 @@ st.set_page_config(
 )
 
 # --- CONFIGURATION VARIABLES ---
-
+# CLEAN RAW DATA URL MATCHED TO YOUR SHEET ID PERFECTLY
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1Kckp2mug8-bUlGroArM5bM9guK2jmt2w9XAfQPKuIl4/export?format=csv"
-
-# Form link where teachers submit new links (Sheet updates automatically)
 GOOGLE_FORM_SUBMIT_URL = "https://docs.google.com/forms/d/e/YOUR_FORM_ID/viewform" 
 
 # --- SYLLABUS DATA STRUCTURE ---
@@ -61,10 +59,11 @@ def fetch_open_access_articles(query):
 
 def fetch_internal_worksheets(component, subtopic):
     try:
+        # Pulls from our direct export URL variable
         df = pd.read_csv(GOOGLE_SHEET_URL)
         df.columns = df.columns.str.strip()
-        # required_columns = ['Component', 'Topic', 'The URL link', 'Resource Name']
-        # Change the 'l' to a capital 'L' to match your sheet perfectly!
+        
+        # ALIGNED PERFECTLY TO YOUR GOOGLE SHEET HEADERS (Capital 'L' in Link)
         required_columns = ['Component', 'Topic', 'The URL Link', 'Resource Name']
         
         if all(col in df.columns for col in required_columns):
@@ -80,14 +79,12 @@ def fetch_internal_worksheets(component, subtopic):
 # --- APPLICATION INTERFACE STRUCTURE ---
 st.title("📚 PTES 9489 History Library")
 
-# Setup two isolated views using Streamlit Tabs
 tab_student, tab_admin = st.tabs(["📖 Student Library Hub", "🔐 Lecturer Admin Portal"])
 
 # ==================== TAB 1: STUDENT VIEW ====================
 with tab_student:
     st.write("Select your module category to gather online readings and internal department materials.")
     
-    # Sidebar Filtering Controls
     st.sidebar.header("📋 Syllabus Filter")
     selected_component = st.sidebar.selectbox("Select Component Option", list(SYLLABUS_OPTIONS.keys()))
     selected_subtopic = st.sidebar.selectbox("Select Core Subject Topic", SYLLABUS_OPTIONS[selected_component])
@@ -126,10 +123,9 @@ with tab_student:
             
             if internal_results:
                 st.success(f"Found {len(internal_results)} custom resource link(s) for this specific topic!")
-                # Loops perfectly whether there are 1, 5, or 20 resource records
                 for row in internal_results:
                     name = row.get('Resource Name', 'Worksheet Handout')
-                    url = row.get('The URL link', '#')
+                    url = row.get('The URL Link', '#')  # Capital 'L'
                     desc = row.get('Description', 'No description provided.')
                     st.markdown(f"* 👉 **[{name}]({url})** — *{desc}*")
             else:
@@ -144,18 +140,14 @@ with tab_student:
 with tab_admin:
     st.subheader("🔐 Lecturer Administration Access")
     
-    # Password verification framework using Streamlit Secrets
     admin_password_input = st.text_input("Enter Department Authorization Password:", type="password")
     
-    # Verifies entry matches your application secret string
     if admin_password_input == st.secrets.get("ADMIN_PASSWORD"):
-        st.success("Authorization Verified. Welcome back, Educator.") 
+        st.success("Authorization Verified. Welcome back, Educator.")
         st.markdown("### 📤 Upload New Worksheet or Article Metadata Link")
         st.write("To add interactive forms, sheets links, or drive files to the library collection, use the secure link utility below.")
-        
         st.info("💡 Make sure your Google Drive PDF or Microsoft Form sharing permission is explicitly configured to 'Anyone with link can view' before adding it!")
         
-        # Provides clean, embedded gateway out to the form repository
         st.markdown(f"""
         <a href="{GOOGLE_FORM_SUBMIT_URL}" target="_blank">
             <button style="background-color:#28a745; color:white; border:none; padding:12px 24px; border-radius:4px; font-size:16px; cursor:pointer;">
