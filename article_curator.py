@@ -30,7 +30,7 @@ SYLLABUS_OPTIONS = {
         "Stalin's Rise To Power",
         "Dictatorship Rule"
     ],
-    "Hitler's Germany (1929-1941)" [
+    "Hitler's Germany (1929-1941)": [
         "Hitler's Rise To Power",
         "Dictatorship Rule"
     ]
