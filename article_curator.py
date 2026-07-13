@@ -145,9 +145,8 @@ with tab_admin:
     admin_password_input = st.text_input("Enter Department Authorization Password:", type="password")
     
     # Verifies entry matches your application secret string
-    if admin_password_input == st.secrets.get("ADMIN_PASSWORD", "brunei9489"):
-        st.success("Authorization Verified. Welcome back, Educator.")
-        
+    if admin_password_input == st.secrets.get("ADMIN_PASSWORD"):
+        st.success("Authorization Verified. Welcome back, Educator.") 
         st.markdown("### 📤 Upload New Worksheet or Article Metadata Link")
         st.write("To add interactive forms, sheets links, or drive files to the library collection, use the secure link utility below.")
         
