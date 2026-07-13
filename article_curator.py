@@ -11,7 +11,9 @@ st.set_page_config(
 )
 
 # --- CONFIGURATION VARIABLES ---
+#GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1Kckp2mug8-bUlGroArM5bM9guK2jmt2w9XAfQPKuIl4/export?format=csv"
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1Kckp2mug8-bUlGroArM5bM9guK2jmt2w9XAfQPKuIl4/export?format=csv"
+#GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1Kckp2mug8-bUlGroArM5bM9guK2jmt2w9XAfQPKuIl4/export?format=csv"
 # GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1Kckp2mug8-bUlGroArM5bM9guK2jmt2w9XAfQPKuIl4/edit?gid=0#gid=0"
 # Form link where teachers submit new links (Sheet updates automatically)
 GOOGLE_FORM_SUBMIT_URL = "https://docs.google.com/forms/d/e/YOUR_FORM_ID/viewform" 
