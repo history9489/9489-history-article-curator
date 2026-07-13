@@ -1,157 +1,548 @@
 import streamlit as st
-import requests
-import urllib.parse
+import gspread
+from google.oauth2.service_account import Credentials  # Upgraded to modern authentication
 import pandas as pd
+from datetime import datetime
+import io
+import urllib.parse
+import requests
+import docx
+from docx import Document
+from docx.enum.section import WD_ORIENT
+from docx.shared import Inches, Pt
+from docx.oxml import OxmlElement, parse_xml
+from docx.oxml.ns import qn, nsdecls
 
-# --- PAGE CONFIGURATION ---
+# --- 1. PAGE CONFIGURATION & STYLING ---
 st.set_page_config(
-    page_title="PTES 9489 History Library",
+    page_title="PTES Reading Articles Tracker",
     page_icon="📚",
     layout="wide"
 )
 
-# --- CONFIGURATION VARIABLES ---
-# CLEAN RAW DATA URL POINTING DIRECTLY TO SHEET 1
-GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1Kckp2mug8-bUlGroArM5bM9guK2jmt2w9XAfQPKuIl4/export?format=csv&gid=0"
+# --- Helper Function for Pristine Administrative Formatting ---
+def format_cell_borders_and_margins(cell, top=100, bottom=100, left=150, right=150):
+    tcPr = cell._tc.get_or_add_tcPr()
+    
+    # Enforce pure white background
+    shading_elm = parse_xml(r'<w:shd {} w:fill="FFFFFF"/>'.format(nsdecls('w')))
+    tcPr.append(shading_elm)
+    
+    # Custom Cell Padding
+    tcMar = OxmlElement('w:tcMar')
+    for m, val in [('top', top), ('bottom', bottom), ('left', left), ('right', right)]:
+        node = OxmlElement(f'w:{m}')
+        node.set(qn('w:w'), str(val))
+        node.set(qn('w:type'), 'dxa')
+        tcMar.append(node)
+    tcPr.append(tcMar)
+    
+    # Crisp, Bold Solid Dark Borders
+    tcBorders = OxmlElement('w:tcBorders')
+    for border_name in ['top', 'left', 'bottom', 'right']:
+        border = OxmlElement(f'w:{border_name}')
+        border.set(qn('w:val'), 'single')
+        border.set(qn('w:sz'), '6')          
+        border.set(qn('w:space'), '0')
+        border.set(qn('w:color'), '000000')  
+        tcBorders.append(border)
+    tcPr.append(tcBorders)
 
-# --- SYLLABUS DATA STRUCTURE ---
-SYLLABUS_OPTIONS = {
-    "Modern Europe (1750–1921)": [
-        "France, 1774–1814",
-        "Industrial Revolution in Britain",
-        "Liberalism and nationalism in Germany",
-        "The Russian Revolution"
-    ],
-    "The Origin & Development of Cold War": [
-        "Origins of the Cold War",
-        "Historian Interpretation",
-        "Dictatorship Rule"
-    ],
-    "Stalin Russia (1924-1941)": [
-        "Stalin's Rise To Power",
-        "Dictatorship Rule"
-    ],
-    "Hitler's Germany (1929-1941)": [
-        "Hitler's Rise To Power",
-        "Dictatorship Rule"
-    ]
+# --- 2. SECURE DATABASE CONNECTION (GOOGLE SHEETS) ---
+def connect_to_sheets():
+    try:
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets", 
+            "https://www.googleapis.com/auth/drive"
+        ]
+        
+        if "gspread_creds" not in st.secrets:
+            st.error("Missing 'gspread_creds' in Streamlit Secrets dashboard config.")
+            return None
+            
+        creds_info = dict(st.secrets["gspread_creds"])
+        
+        # Parse escaped literal backslashes dynamically to guarantee compatibility
+        if "private_key" in creds_info:
+            creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
+            
+        creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
+        client = gspread.authorize(creds)
+        return client
+    except Exception as e:
+        st.error(f"Database Connection Error: {e}")
+        return None
+
+client = connect_to_sheets()
+
+# --- 3. GLOBAL HISTORY SYLLABUS MAP FOR ENCODING ---
+SYLLABUS_MAP = {
+    "Modern Europe (1750–1921)": {
+        "France, 1774–1814": "ME_Fr",
+        "Industrial Revolution in Britain": "ME_In",
+        "Liberalism and nationalism in Germany": "ME_Lib",
+        "The Russian Revolution": "ME_Re"
+    },
+    "The Origin & Development of Cold War": {
+        "Origins of the Cold War": "CW_Ori",
+        "Historian Interpretation": "CW_Int",
+        "Dictatorship Rule": "CW_DR"
+    },
+    "Stalin Russia (1924-1941)": {
+        "Stalin's Rise To Power": "SR_R2P",
+        "Dictatorship Rule": "SR_DR"
+    },
+    "Hitler's Germany (1929-1941)": {
+        "Hitler's Rise To Power": "HG_R2P",
+        "Dictatorship Rule": "HG_DR"
+    }
 }
 
-# --- METADATA ENGINES ---
-def fetch_open_access_articles(query):
-    url = f"https://api.crossref.org/works?query={urllib.parse.quote(query)}&rows=5"
-    articles = []
-    try:
-        response = requests.get(url, headers={"User-Agent": "History9489Portal/1.0 (mailto:ptes@education.edu.bn)"})
-        if response.status_code == 200:
-            data = response.json()
-            items = data.get("message", {}).get("items", [])
-            for item in items:
-                title = item.get("title", ["Untitled"])[0]
-                abstract = item.get("abstract", f"Academic paper published by {item.get('publisher', 'Unknown Publisher')}.")
-                abstract = abstract.replace("<jats:p>", "").replace("</jats:p>", "")
-                link = item.get("URL", "#")
-                articles.append({"title": title, "summary": abstract[:250] + "...", "link": link})
-    except Exception as e:
-        st.error(f"Error fetching articles: {e}")
-    return articles
-
-def fetch_internal_worksheets(component, subtopic):
-    try:
-        df = pd.read_csv(GOOGLE_SHEET_URL)
-        df.columns = df.columns.str.strip()
-        
-        required_columns = ['Component', 'Topic', 'The URL Link', 'Resource Name']
-        
-        if all(col in df.columns for col in required_columns):
-            matched_df = df[
-                (df['Component'].str.strip().str.lower() == component.strip().lower()) & 
-                (df['Topic'].str.strip().str.lower() == subtopic.strip().lower())
-            ]
-            return matched_df.to_dict('records')
-        return []
-    except Exception as e:
-        return []
-
-# --- APPLICATION INTERFACE STRUCTURE ---
-st.title("📚 PTES 9489 History Library")
-
-tab_student, tab_admin = st.tabs(["📖 Student Library Hub", "🔐 Lecturer Admin Portal"])
-
-# ==================== TAB 1: STUDENT VIEW ====================
-with tab_student:
-    st.write("Select your module category to gather online readings and internal department materials.")
+# --- SIDEBAR BRANDING & DIGITAL CITIZENSHIP ---
+with st.sidebar:
+    st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/Flag_of_Brunei.svg/180px-Flag_of_Brunei.svg.png", width=100)
+    st.title("PTES Library Services")
+    st.markdown("### 📋 System Guidelines")
     
-    st.sidebar.header("📋 Syllabus Filter")
-    selected_component = st.sidebar.selectbox("Select Component Option", list(SYLLABUS_OPTIONS.keys()))
-    selected_subtopic = st.sidebar.selectbox("Select Core Subject Topic", SYLLABUS_OPTIONS[selected_component])
-
-    st.subheader("🔍 Refine Search Query")
-    search_keyword = st.text_input("Modify keywords to fine-tune your resource matching:", value=selected_subtopic)
-
-    col1, col2 = st.columns(2)
-    with col1:
-        search_articles = st.button("🚀 Fetch Syllabus Articles", use_container_width=True)
-    with col2:
-        search_worksheets = st.button("📝 Find Worksheets & Sheets Data", use_container_width=True)
-
-    st.markdown("---")
-
-    if search_articles:
-        st.subheader(f"📖 Academic Materials for: *{search_keyword}*")
-        with st.spinner("Scanning open archives..."):
-            results = fetch_open_access_articles(search_keyword)
-            if results:
-                for article in results:
-                    with st.container():
-                        st.markdown(f"### 📄 {article['title']}")
-                        st.write(f"**Preview Summary:** {article['summary']}")
-                        st.markdown(f"[🔗 Read Full Article]({article['link']})")
-                        st.markdown("---")
-            else:
-                st.warning("No global open-access materials matching this term were located.")
-
-    if search_worksheets:
-        st.subheader(f"🧩 Target Worksheets for: *{search_keyword}*")
+    with st.expander("📖 Reading Articles Rules"):
+        st.write("""
+        1. **Article Schedule:** Chief Librarian releases 24-25 articles monthly (Monday–Thursday & Saturday).
+        2. **Honesty & Integrity:** Tallies must correspond strictly to verified student readings.
+        3. **Librarian Control:** Only authorized library staff may unlock and submit records.
+        """)
+    
+    st.divider()
+    st.markdown("""
+        <style>
+        .footer-line {
+            font-size: 11px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+        .dev-line {
+            font-size: 11px;
+            text-align: center;
+            color: #888;
+        }
+        </style>
         
-        st.markdown("### 🏫 Department Google Workspace Resources")
-        with st.spinner("Accessing department Google Sheet..."):
-            internal_results = fetch_internal_worksheets(selected_component, search_keyword)
-            
-            if internal_results:
-                st.success(f"Found {len(internal_results)} custom resource link(s) for this specific topic!")
-                for row in internal_results:
-                    name = row.get('Resource Name', 'Worksheet Handout')
-                    url = row.get('The URL Link', '#')
-                    desc = row.get('Description', 'No description provided.')
-                    st.markdown(f"* 👉 **[{name}]({url})** — *{desc}*")
-            else:
-                st.info("No customized internal worksheets found for this exact subtopic yet.")
-                
+        <div class="footer-line">
+            Ref. ⬜ Perseverance &nbsp; 🟥 Trustworthiness &nbsp; 🔵 Exemplary &nbsp; 🟡 Self-reliance &nbsp; 🟢
+        </div>
+        <div class="dev-line">
+            Web Developer: Miss Hjh Nurul Haziqah HN (PTES Computer Science)
+        </div>
+    """, unsafe_allow_html=True)
+
+# --- 4. MAIN INTERFACE ---
+st.title("📚 PTES Reading Articles Tracker")
+st.markdown("Automating the tracking of student reading habits cleanly and efficiently.")
+st.markdown("---")
+
+if client:
+    # 🔐 LIBRARIAN VERIFICATION LAYER
+    admin_pass = st.text_input("🗝️ Enter Librarian Credentials to Unlock Portal:", type="password")
+    
+    if admin_pass == st.secrets["admin_password"]:
+        st.success("🔓 Librarian Access Granted.")
         st.markdown("---")
-        st.markdown("### 🌐 External Live Web Resources")
-        encoded_query = urllib.parse.quote(f"{search_keyword} history 9489 worksheet filetype:pdf OR quiz")
-        st.markdown(f"* 👉 [Search Open Source PDF Worksheets via DuckDuckGo](https://duckduckgo.com/?q={encoded_query})")
+        
+        # 🗂️ STEP 1: GLOBAL COHORT SELECTOR
+        st.markdown("### 🗂️ Step 1: Select Cohort Level")
+        cohort_choice = st.selectbox(
+            "Choose Student Cohort Database to access:",
+            ["Lower Sixth (BE Classes)", "Upper Sixth (AE Classes)"]
+        )
+        
+        if cohort_choice == "Lower Sixth (BE Classes)":
+            target_spreadsheet = "Articles_Tracker_DB_BE"
+        else:
+            target_spreadsheet = "Articles_Tracker_DB_AE"
+            
+        st.info(f"Connected to live database: **{target_spreadsheet}**")
+        st.markdown("---")
 
-# ==================== TAB 2: SECURE ADMIN VIEW ====================
-with tab_admin:
-    st.subheader("🔐 Lecturer Administration Access")
-    
-    admin_password_input = st.text_input("Enter Department Authorization Password:", type="password")
-    
-    if admin_password_input == st.secrets.get("ADMIN_PASSWORD"):
-        st.success("Authorization Verified. Welcome back, Educator.")
-        st.markdown("### 📤 Update Database Library")
-        st.write("Click the button below to open your spreadsheet database and add rows manually.")
-        
-        # This button opens your actual Google Sheet directly so you can update rows manually!
-        st.markdown("""
-        <a href="https://docs.google.com/spreadsheets/d/1Kckp2mug8-bUlGroArM5bM9guK2jmt2w9XAfQPKuIl4/edit" target="_blank">
-            <button style="background-color:#28a745; color:white; border:none; padding:12px 24px; border-radius:4px; font-size:16px; cursor:pointer;">
-                🟢 Open Google Sheet Database
-            </button>
-        </a>
-        """, unsafe_allow_html=True)
-        
-    elif admin_password_input != "":
-        st.error("Access Denied. Incorrect administration password provided.")
+        # 🛰️ FETCH FULL REGISTRY DATA
+        try:
+            registry_sheet = client.open(target_spreadsheet).worksheet("Student_Registry")
+            all_rows = registry_sheet.get_all_values()
+            
+            headers = all_rows[0]
+            data_rows = all_rows[1:]
+            df_registry = pd.DataFrame(data_rows, columns=headers)
+            
+            class_registry = {}
+            for _, row in df_registry.iterrows():
+                form_class = str(row.get("Form Class", "")).strip()
+                student_name = str(row.get("Student Name", "")).strip()
+                if form_class and student_name and not form_class.startswith("TOP"):
+                    if form_class not in class_registry:
+                        class_registry[form_class] = []
+                    class_registry[form_class].append(student_name)
+                    
+        except Exception as e:
+            st.error(f"Error accessing Google Sheet: {e}")
+            df_registry = pd.DataFrame()
+            class_registry = {}
+
+        # 🧭 CUSTOM NAVIGATION TABS
+        portal_tab1, portal_tab2, portal_tab3, portal_tab4 = st.tabs([
+            "📝 Submit Tally Logs", 
+            "📥 Lecturer Admin Portal",
+            "📊 Class Statistics Report", 
+            "🏆 Top Readers Leaderboard"
+        ])
+
+        # ==================== TAB 1: LOG INSERTER ====================
+        with portal_tab1:
+            if not class_registry:
+                st.warning("No registry data found. Please check your Google Sheet tabs.")
+            else:
+                st.markdown("### 📝 Enter Student Tally Details")
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    sorted_classes = sorted(list(class_registry.keys()))
+                    selected_class = st.selectbox("1. Select Form Class:", sorted_classes, key="challenge_class")
+                    
+                    student_options = sorted(class_registry.get(selected_class, []))
+                    selected_student = st.selectbox("2. Select Student Name:", student_options, key="challenge_student")
+                
+                with col2:
+                    months_list = ["March", "April", "May", "June", "July", "August", "September", "October"]
+                    selected_month = st.selectbox("3. Select Challenge Month:", months_list)
+                    article_count = st.number_input("4. Amount of Reading Articles Done:", min_value=1, max_value=31, step=1)
+                
+                st.markdown("---")
+                st.write(f"📂 **5. Enter the specific calendar dates for the {int(article_count)} materials read:**")
+                
+                month_map = {
+                    "March": 3, "April": 4, "May": 5, "June": 6, 
+                    "July": 7, "August": 8, "September": 9, "October": 10
+                }
+                target_month_num = month_map.get(selected_month, datetime.now().month)
+                current_year = datetime.now().year
+                default_calendar_date = datetime(current_year, target_month_num, 1)
+                
+                reading_dates = []
+                cols = st.columns(4)
+                
+                for i in range(int(article_count)):
+                    col_index = i % 4
+                    with cols[col_index]:
+                        date_val = st.date_input(
+                            f"Article #{i+1} Date", 
+                            value=default_calendar_date,
+                            key=f"{selected_month}_challenge_date_{i}"
+                        )
+                        reading_dates.append(date_val.strftime("%d/%m/%Y"))
+                
+                st.markdown("---")
+                student_remarks = st.text_input(
+                    "📝 6. Additional Remarks / Student Status Notes (Optional):", 
+                    value="", placeholder="e.g., Special consideration"
+                )
+                
+                st.markdown("---")
+                
+                if st.button("🔥 Submit Tally Data Logs", use_container_width=True):
+                    try:
+                        challenge_db = client.open(target_spreadsheet).worksheet("Reading_Article_DB")
+                        dates_string = ", ".join(reading_dates)
+                        
+                        new_tally_row = [
+                            str(datetime.now().strftime("%d/%m/%Y %H:%M:%S")),
+                            str(selected_class),
+                            str(selected_student),
+                            str(selected_month),
+                            str(int(article_count)),
+                            str(dates_string),
+                            str(student_remarks).strip()
+                        ]
+                        
+                        challenge_db.append_row(new_tally_row, value_input_option="USER_ENTERED")
+                        st.success(f"🎉 Success! Recorded {article_count} articles into **{target_spreadsheet}**.")
+                        st.balloons()
+                    except Exception as e:
+                        st.error(f"Failed to record data: {e}")
+
+        # ==================== TAB 2: LECTURER ADMIN PORTAL ====================
+        with portal_tab2:
+            st.markdown("## 📥 History Reference Log Entry")
+            st.write("Incorporate text files, notes, or assignment worksheet variables directly into the cohort backend.")
+            
+            with st.form("lecturer_upload_form", clear_on_submit=True):
+                col_left, col_right = st.columns(2)
+                
+                with col_left:
+                    admin_component = st.selectbox("Select Component Option:", list(SYLLABUS_MAP.keys()), key="act_comp")
+                    admin_topic = st.selectbox("Select Core Subject Topic:", list(SYLLABUS_MAP[admin_component].keys()), key="act_top")
+                    
+                    material_type = st.selectbox(
+                        "Select Material Type Parameters:",
+                        [
+                            "References to selected Topic (pdf)",
+                            "References to selected Topic (URL)",
+                            "Worksheet in pdf form",
+                            "Worksheet via URL form"
+                        ]
+                    )
+                
+                with col_right:
+                    description_input = st.text_area("Resource Description Parameter:", placeholder="Type clear descriptive context here...", height=160)
+                
+                url_input = st.text_input("Resource URL Target Web Link:", placeholder="https://drive.google.com/file/d/...")
+                
+                # Form Submit Execution Button
+                submit_tally = st.form_submit_button("⚡ Append Reference Parameters to Database", use_container_width=True)
+                
+                if submit_tally:
+                    if url_input.strip() == "" or description_input.strip() == "":
+                        st.error("Submission blocked. Both Target Web Link and Description fields require entries.")
+                    else:
+                        computed_code = SYLLABUS_MAP[admin_component][admin_topic]
+                        bracket_prefix = material_type.split(" ")[-1].replace("(", "").replace(")", "").upper()
+                        compiled_description = f"[{bracket_prefix}] {description_input.strip()}"
+                        
+                        try:
+                            history_db_tab = client.open(target_spreadsheet).worksheet("Reading_Article_DB")
+                            
+                            new_admin_row = [
+                                str(computed_code),        # Column A: Link_Code
+                                str(url_input.strip()),    # Column B: The URL link
+                                str(compiled_description)  # Column C: Description
+                            ]
+                            
+                            history_db_tab.append_row(new_admin_row, value_input_option="USER_ENTERED")
+                            st.success(f"🔥 Success! Appended parameter row into **{target_spreadsheet}** under syllabus key: `{computed_code}`")
+                            st.balloons()
+                        except Exception as e:
+                            st.error(f"Failed to append row parameter natively via gspread: {e}")
+
+        # ==================== TAB 3: LIVE REPORT GENERATOR ====================
+        with portal_tab3:
+            st.markdown("### 📊 Class Reading Overview")
+            
+            if df_registry.empty:
+                st.warning("Waiting for connection to active Google Sheet...")
+            else:
+                available_classes = sorted(list(df_registry["Form Class"].unique()))
+                available_classes = [c for c in available_classes if c and not str(c).startswith("TOP")]
+                report_class = st.selectbox("Select Target Class to View:", available_classes)
+                
+                ordered_months = ["MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER"]
+                current_month_idx = datetime.now().month  
+                
+                visible_columns = ["Form Class", "Student Name"]
+                
+                for m_name in ordered_months:
+                    found_col = next((col for col in df_registry.columns if col.upper().startswith(m_name[:3])), None)
+                    if found_col:
+                        month_num = month_map.get(m_name.capitalize(), 12)
+                        if month_num <= current_month_idx:
+                            visible_columns.append(found_col)
+                
+                filtered_df = df_registry[df_registry["Form Class"] == report_class].copy()
+                display_table = filtered_df[visible_columns].reset_index(drop=True)
+                display_table = display_table.replace(["#N/A", "nan", ""], "0")
+                
+                month_cols_only = [c for c in visible_columns if c not in ["Form Class", "Student Name"]]
+                for col in month_cols_only:
+                    display_table[col] = pd.to_numeric(display_table[col], errors='coerce').fillna(0).astype(int)
+                
+                display_table["TOTAL"] = display_table[month_cols_only].sum(axis=1)
+                st.dataframe(display_table, use_container_width=True)
+                
+                # --- CLASS REPORT GENERATION ENGINE ---
+                doc = Document()
+                for section in doc.sections:
+                    section.orientation = WD_ORIENT.LANDSCAPE
+                    section.page_width = Inches(11.0)
+                    section.page_height = Inches(8.5)
+                    section.top_margin = Inches(0.5)
+                    section.bottom_margin = Inches(0.5)
+                    section.left_margin = Inches(0.5)
+                    section.right_margin = Inches(0.5)
+                    
+                    footer_p = section.footer.paragraphs[0]
+                    footer_p.alignment = 2  
+                    footer_run = footer_p.add_run("Page ")
+                    footer_run.font.size = Pt(9)
+                    footer_run.font.name = 'Arial'
+                    
+                    fldSimple = parse_xml(r'<w:fldSimple %s w:instr="PAGE"/>' % nsdecls('w'))
+                    footer_p._p.append(fldSimple)
+                
+                title_p = doc.add_paragraph()
+                title_run = title_p.add_run("PUSAT TINGKATAN ENAM SENGKURONG\nSTUDENT READING ARTICLES SUMMARY REPORT")
+                title_run.bold = True
+                title_run.font.size = Pt(12)
+                title_run.font.name = 'Arial'
+                title_p.alignment = 1
+                
+                meta_p = doc.add_paragraph()
+                meta_run = meta_p.add_run(f"CLASS: {report_class}  |  DATABASE COHORT: {cohort_choice.upper()}\nREPORT GENERATED ON: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
+                meta_run.font.size = Pt(9.5)
+                meta_run.italic = True
+                meta_p.alignment = 1
+                
+                doc.add_paragraph().paragraph_format.space_after = Pt(12)
+                
+                word_cols = list(display_table.columns)
+                table = doc.add_table(rows=1, cols=len(word_cols))
+                table.autofit = True
+                
+                hdr_cells = table.rows[0].cells
+                for idx, col_name in enumerate(word_cols):
+                    hdr_cells[idx].text = str(col_name).upper()
+                    run = hdr_cells[idx].paragraphs[0].runs[0]
+                    run.font.bold = True
+                    run.font.size = Pt(10)
+                    run.font.name = 'Arial'
+                    run.font.color.rgb = docx.shared.RGBColor(0, 0, 0)
+                    format_cell_borders_and_margins(hdr_cells[idx], top=120, bottom=120, left=150, right=150)
+                
+                for _, row in display_table.iterrows():
+                    row_cells = table.add_row().cells
+                    for idx, col_name in enumerate(word_cols):
+                        val_str = str(row[col_name])
+                        row_cells[idx].text = val_str
+                        run = row_cells[idx].paragraphs[0].runs[0]
+                        run.font.size = Pt(9.5)
+                        run.font.name = 'Arial'
+                        run.font.color.rgb = docx.shared.RGBColor(0, 0, 0)
+                        if col_name == "TOTAL":
+                            run.font.bold = True
+                        format_cell_borders_and_margins(row_cells[idx], top=100, bottom=100, left=150, right=150)
+                
+                doc_io = io.BytesIO()
+                doc.save(doc_io)
+                doc_io.seek(0)
+                
+                st.markdown("---")
+                st.download_button(
+                    label=f"📥 Download Official {report_class} Reading Summary (.docx)",
+                    data=doc_io,
+                    file_name=f"PTES_Reading_Report_{report_class}_{datetime.now().strftime('%b%Y')}.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    use_container_width=True
+                )
+
+        # ==================== TAB 4: LEADERBOARD & EXPORT ====================
+        with portal_tab4:
+            st.markdown("### 🏆 Cohort Top 3 Honors Registry")
+            
+            try:
+                top_cells = registry_sheet.get("N225:P227")
+                
+                if top_cells and len(top_cells) > 0:
+                    cols_dash = st.columns(len(top_cells))
+                    medals = ["🥇 1st Place", "🥈 2nd Place", "🥉 3rd Place"]
+                    
+                    for idx, data_row in enumerate(top_cells):
+                        if len(data_row) >= 3:
+                            s_name = data_row[0]
+                            f_class = data_row[1]
+                            t_score = data_row[2]
+                            
+                            with cols_dash[idx]:
+                                st.metric(
+                                    label=f"{medals[idx]} ({f_class})",
+                                    value=f"{s_name}",
+                                    delta=f"{t_score} Total Articles"
+                                )
+                    
+                    leaderboard_data = []
+                    for data_row in top_cells:
+                        if len(data_row) >= 3:
+                            leaderboard_data.append({
+                                "Rank Placement": medals[len(leaderboard_data)],
+                                "Form Class": data_row[1],
+                                "Student Name": data_row[0],
+                                "Total Articles Read": int(data_row[2]) if str(data_row[2]).isdigit() else data_row[2]
+                            })
+                    
+                    df_leaderboard = pd.DataFrame(leaderboard_data)
+                    st.markdown("---")
+                    st.markdown("#### Detailed Leaderboard View")
+                    st.dataframe(df_leaderboard, use_container_width=True, hide_index=True)
+                    
+                    leader_doc = Document()
+                    for section in leader_doc.sections:
+                        section.orientation = WD_ORIENT.LANDSCAPE
+                        section.page_width = Inches(11.0)
+                        section.page_height = Inches(8.5)
+                        section.top_margin = Inches(0.5)
+                        section.bottom_margin = Inches(0.5)
+                        section.left_margin = Inches(0.5)
+                        section.right_margin = Inches(0.5)
+                        
+                        f_p = section.footer.paragraphs[0]
+                        f_p.alignment = 2
+                        f_run = f_p.add_run("Page ")
+                        f_run.font.size = Pt(9)
+                        f_p._p.append(parse_xml(r'<w:fldSimple %s w:instr="PAGE"/>' % nsdecls('w')))
+                    
+                    l_title_p = leader_doc.add_paragraph()
+                    l_title_run = l_title_p.add_run("PUSAT TINGKATAN ENAM SENGKURONG\nTOP READERS LEADERBOARD RECOGNITION REPORT")
+                    l_title_run.bold = True
+                    l_title_run.font.size = Pt(12)
+                    l_title_run.font.name = 'Arial'
+                    l_title_p.alignment = 1
+                    
+                    l_meta_p = leader_doc.add_paragraph()
+                    l_meta_run = l_meta_p.add_run(f"COHORT GATEWAY: {cohort_choice.upper()}\nREPORT EXTRACTED ON: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
+                    l_meta_run.font.size = Pt(9.5)
+                    l_meta_run.italic = True
+                    l_meta_p.alignment = 1
+                    
+                    leader_doc.add_paragraph().paragraph_format.space_after = Pt(12)
+                    
+                    l_word_cols = list(df_leaderboard.columns)
+                    l_table = leader_doc.add_table(rows=1, cols=len(l_word_cols))
+                    l_table.autofit = True
+                    
+                    l_hdr_cells = l_table.rows[0].cells
+                    for idx, col_name in enumerate(l_word_cols):
+                        l_hdr_cells[idx].text = str(col_name).upper()
+                        run = l_hdr_cells[idx].paragraphs[0].runs[0]
+                        run.font.bold = True
+                        run.font.size = Pt(10)
+                        run.font.name = 'Arial'
+                        run.font.color.rgb = docx.shared.RGBColor(0, 0, 0)
+                        format_cell_borders_and_margins(l_hdr_cells[idx], top=120, bottom=120, left=150, right=150)
+                    
+                    for _, row in df_leaderboard.iterrows():
+                        l_row_cells = l_table.add_row().cells
+                        for idx, col_name in enumerate(l_word_cols):
+                            val_str = str(row[col_name])
+                            l_row_cells[idx].text = val_str
+                            run = l_row_cells[idx].paragraphs[0].runs[0]
+                            run.font.size = Pt(9.5)
+                            run.font.name = 'Arial'
+                            run.font.color.rgb = docx.shared.RGBColor(0, 0, 0)
+                            if col_name == "Total Articles Read":
+                                run.font.bold = True
+                            format_cell_borders_and_margins(l_row_cells[idx], top=100, bottom=100, left=150, right=150)
+                    
+                    l_doc_io = io.BytesIO()
+                    leader_doc.save(l_doc_io)
+                    l_doc_io.seek(0)
+                    
+                    st.markdown("---")
+                    st.download_button(
+                        label="📥 Download Official Landscape Leaderboard Report (.docx)",
+                        data=l_doc_io,
+                        file_name=f"PTES_Leaderboard_{cohort_choice.replace(' ', '_')}_{datetime.now().strftime('%b%Y')}.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        use_container_width=True,
+                        key="leaderboard_download_btn"
+                    )
+                else:
+                    st.info("No leaderboard records found. Ensure your formulas are loaded in cells N225:P227.")
+            except Exception as e:
+                st.error(f"Could not extract leaderboard formula cells: {e}")
+                
+    elif admin_pass != "":
+        st.error("❌ Invalid Credentials. Access Denied.")
