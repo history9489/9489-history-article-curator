@@ -56,13 +56,15 @@ def connect_to_sheets():
             "https://www.googleapis.com/auth/drive"
         ]
         
+        # Checked against your new TOML structure key
         if "gspread_creds" not in st.secrets:
             st.error("Missing 'gspread_creds' in Streamlit Secrets dashboard config.")
             return None
             
         creds_info = dict(st.secrets["gspread_creds"])
         
-        # Parse escaped literal backslashes dynamically to guarantee compatibility
+        # Your new triple-quoted multi-line string doesn't need literal '\n' replacement strings, 
+        # but we keep this handler active as a safety cushion for system changes.
         if "private_key" in creds_info:
             creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
             
@@ -144,7 +146,8 @@ if client:
     # 🔐 LIBRARIAN VERIFICATION LAYER
     admin_pass = st.text_input("🗝️ Enter Librarian Credentials to Unlock Portal:", type="password")
     
-    if admin_pass == st.secrets["admin_password"]:
+    # Capitalized key name fix to securely look up "ADMIN_PASSWORD" from your TOML config
+    if admin_pass == st.secrets["ADMIN_PASSWORD"]:
         st.success("🔓 Librarian Access Granted.")
         st.markdown("---")
         
