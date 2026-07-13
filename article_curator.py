@@ -11,9 +11,9 @@ st.set_page_config(
 )
 
 # --- CONFIGURATION VARIABLES ---
-# https://docs.google.com/spreadsheets/d/1Kckp2mug8-bUlGroArM5bM9guK2jmt2w9XAfQPKuIl4/edit?gid=0#gid=0
 # CLEAN RAW DATA URL POINTING DIRECTLY TO SHEET 1
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1Kckp2mug8-bUlGroArM5bM9guK2jmt2w9XAfQPKuIl4/export?format=csv&gid=0"
+
 # --- SYLLABUS DATA STRUCTURE ---
 SYLLABUS_OPTIONS = {
     "Modern Europe (1750–1921)": [
@@ -58,11 +58,9 @@ def fetch_open_access_articles(query):
 
 def fetch_internal_worksheets(component, subtopic):
     try:
-        # Pulls from our direct export URL variable
         df = pd.read_csv(GOOGLE_SHEET_URL)
         df.columns = df.columns.str.strip()
         
-        # ALIGNED PERFECTLY TO YOUR GOOGLE SHEET HEADERS (Capital 'L' in Link)
         required_columns = ['Component', 'Topic', 'The URL Link', 'Resource Name']
         
         if all(col in df.columns for col in required_columns):
@@ -124,7 +122,7 @@ with tab_student:
                 st.success(f"Found {len(internal_results)} custom resource link(s) for this specific topic!")
                 for row in internal_results:
                     name = row.get('Resource Name', 'Worksheet Handout')
-                    url = row.get('The URL Link', '#')  # Capital 'L'
+                    url = row.get('The URL Link', '#')
                     desc = row.get('Description', 'No description provided.')
                     st.markdown(f"* 👉 **[{name}]({url})** — *{desc}*")
             else:
@@ -143,14 +141,14 @@ with tab_admin:
     
     if admin_password_input == st.secrets.get("ADMIN_PASSWORD"):
         st.success("Authorization Verified. Welcome back, Educator.")
-        st.markdown("### 📤 Upload New Worksheet or Article Metadata Link")
-        st.write("To add interactive forms, sheets links, or drive files to the library collection, use the secure link utility below.")
-        st.info("💡 Make sure your Google Drive PDF or Microsoft Form sharing permission is explicitly configured to 'Anyone with link can view' before adding it!")
+        st.markdown("### 📤 Update Database Library")
+        st.write("Click the button below to open your spreadsheet database and add rows manually.")
         
-        st.markdown(f"""
-        <a href="{GOOGLE_FORM_SUBMIT_URL}" target="_blank">
+        # This button opens your actual Google Sheet directly so you can update rows manually!
+        st.markdown("""
+        <a href="https://docs.google.com/spreadsheets/d/1Kckp2mug8-bUlGroArM5bM9guK2jmt2w9XAfQPKuIl4/edit" target="_blank">
             <button style="background-color:#28a745; color:white; border:none; padding:12px 24px; border-radius:4px; font-size:16px; cursor:pointer;">
-                ➕ Open Content Management Form
+                🟢 Open Google Sheet Database
             </button>
         </a>
         """, unsafe_allow_html=True)
