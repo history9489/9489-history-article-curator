@@ -1,20 +1,24 @@
 import streamlit as st
+import requests
+import urllib.parse
 import gspread
 from google.oauth2.service_account import Credentials
 
-# --- 1. PAGE SETUP & TITLES ---
-st.set_page_config(page_title="PTES History 9489 Hub", page_icon="📚", layout="wide")
+# --- 1. PAGE CONFIGURATION ---
+st.set_page_config(
+    page_title="PTES 9489 History Library",
+    page_icon="📚",
+    layout="wide"
+)
 
-st.title("📚 PTES History 9489 Academic Hub")
-st.markdown("##### Access core history materials, components, and course assignments cleanly.")
-st.markdown("---")
-
-# --- 2. DATABASE / GOOGLE SHEETS CONNECTION ---
+# --- 2. GOOGLE SHEETS CONNECTION CONFIGURATION ---
 @st.cache_resource
 def init_connection():
     try:
+        # Pulls the secret data directly from the [gspread_creds] block in your Streamlit panel
         creds_dict = dict(st.secrets["gspread_creds"])
         if "private_key" in creds_dict:
+            # Replaces text line breaks into real system code newlines safely in memory
             creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
             
         scopes = [
@@ -24,89 +28,143 @@ def init_connection():
         credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
         return gspread.authorize(credentials)
     except Exception as e:
-        st.error(f"Database Connection Error: {str(e)}")
+        # Instead of crashing the whole page, we display a soft error warning inside the admin tab
         return None
 
 gc = init_connection()
 
-# --- 3. CORE APPLICATION INTERFACE ---
-tab_students, tab_lecturer = st.tabs(["🎓 Student Materials Hub", "🔒 Lecturer Admin Portal"])
+# --- 3. GLOBAL SYLLABUS DATA STRUCTURE ---
+SYLLABUS_OPTIONS = {
+    "Modern Europe (1750–1921)": [
+        "France, 1774–1814",
+        "Industrial Revolution in Britain",
+        "Liberalism and nationalism in Germany",
+        "The Russian Revolution"
+    ],
+    "The Origin & Development of Cold War": [
+        "Origins of the Cold War",
+        "Historian Interpretation",
+        "Dictatorship Rule"
+    ],
+    "Stalin Russia (1924-1941)": [
+        "Stalin's Rise To Power",
+        "Dictatorship Rule"
+    ],
+    "Hitler's Germany (1929-1941)": [
+        "Hitler's Rise To Power",
+        "Dictatorship Rule"
+    ]
+}
+
+MATERIAL_TYPES = [
+    "References to selected Topic (pdf)",
+    "Assignment Worksheet (Doc/Forms)",
+    "Primary Source Material Context",
+    "Lecture Slides / Overview Notes"
+]
+
+# --- 4. HELPER FUNCTIONS FOR LIVE APIS ---
+def fetch_open_access_articles(query):
+    url = f"https://api.crossref.org/works?query={urllib.parse.quote(query)}&rows=5"
+    articles = []
+    try:
+        response = requests.get(url, headers={"User-Agent": "History9489Portal/1.0 (mailto:ptes@education.edu.bn)"})
+        if response.status_code == 200:
+            data = response.json()
+            items = data.get("message", {}).get("items", [])
+            for item in items:
+                title = item.get("title", ["Untitled"])[0]
+                abstract = item.get("abstract", f"Academic paper published by {item.get('publisher', 'Unknown Publisher')}.")
+                abstract = abstract.replace("<jats:p>", "").replace("</jats:p>", "")
+                link = item.get("URL", "#")
+                articles.append({"title": title, "summary": abstract[:250] + "...", "link": link})
+    except Exception as e:
+        st.error(f"Error fetching articles: {e}")
+    return articles
+
+# --- 5. UNIFIED INTERFACE STRUCTURE (TABS) ---
+tab_students, tab_lecturer = st.tabs(["🎓 Student Discovery Hub", "🔒 Lecturer Reference Log Entry"])
 
 # ==========================================
-#   TAB 1: STUDENT INTERFACE (HISTORY 9489)
+#   TAB 1: STUDENT DISCOVERY HUB (YOUR ORIGINAL ENVIRONMENT)
 # ==========================================
 with tab_students:
-    st.header("History 9489 Curriculum Materials")
-    st.write("Select one of the core academic components below to view your reading files and worksheets:")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        with st.expander("📂 Component 1: International Options (Modern International Relations)", expanded=True):
-            st.info("Access core text documents, timeline sheets, and historical sources here.")
-            
-        with st.expander("📂 Component 2: European Options (Modern Europe Documents)", expanded=False):
-            st.info("Access European history study guides and essay review tasks.")
+    st.title("📚 PTES 9489 History Library")
+    st.write("Select your topic category to gather online readings and worksheets.")
 
+    # Sidebar Filter Components (Perfectly Restored)
+    st.sidebar.header("📋 Syllabus Filter")
+    selected_component = st.sidebar.selectbox("Select Component Option", list(SYLLABUS_OPTIONS.keys()))
+    selected_subtopic = st.sidebar.selectbox("Select Core Subject Topic", SYLLABUS_OPTIONS[selected_component])
+
+    # Main search keyword block
+    st.subheader("🔍 Refine Search Query")
+    search_keyword = st.text_input("Modify keywords to fine-tune your resource matching:", value=selected_subtopic)
+
+    # Action Buttons
+    col1, col2 = st.columns(2)
+    with col1:
+        search_articles = st.button("🚀 Fetch Syllabus Articles", use_container_width=True)
     with col2:
-        with st.expander("📂 Component 3: American Options (History of the USA)", expanded=False):
-            st.info("Access domestic policy modules and civil crisis documents.")
-            
-        with st.expander("📂 Component 4: Historical Interpretations & Source Investigations", expanded=False):
-            st.info("Access source analysis templates and advanced evaluation criteria.")
+        search_worksheets = st.button("📝 Find Online Worksheets", use_container_width=True)
+
+    st.markdown("---")
+
+    # Display Query Results
+    if search_articles:
+        st.subheader(f"📖 Academic Materials for: *{search_keyword}*")
+        with st.spinner("Scanning open archives..."):
+            results = fetch_open_access_articles(search_keyword)
+            if results:
+                for article in results:
+                    with st.container():
+                        st.markdown(f"### 📄 {article['title']}")
+                        st.write(f"**Preview Summary:** {article['summary']}")
+                        st.markdown(f"[🔗 Read Full Article]({article['link']})")
+                        st.markdown("---")
+            else:
+                st.warning("No open-access summaries matching this precise subtopic were found. Try modifying the keywords above.")
+
+    if search_worksheets:
+        st.subheader(f"🧩 Target Worksheets for: *{search_keyword}*")
+        encoded_query = urllib.parse.quote(f"{search_keyword} history 9489 worksheet filetype:pdf OR quiz")
+        ddg_search_url = f"https://duckduckgo.com/?q={encoded_query}"
+        quizizz_url = f"https://quizizz.com/admin/search/{urllib.parse.quote(search_keyword)}"
+        
+        st.info("Click below to access dynamic external worksheet frameworks curated for this topic:")
+        st.markdown(f"""
+        * 👉 [Search Open Source PDF Worksheets & Handouts via DuckDuckGo]({ddg_search_url})
+        * 👉 [Check for Interactive Live Revision Quizzes on Quizizz]({quizizz_url})
+        """)
+        st.caption("Note: Worksheets are fetched externally from educational resource domains.")
 
 # ==========================================
-#   TAB 2: LECTURER UPLOAD INTERFACE (MATCHING YOUR DESIGN)
+#   TAB 2: LECTURER ENVIRONMENT (MATCHING YOUR DESIGNED LAYOUT)
 # ==========================================
 with tab_lecturer:
-    st.header("🔒 Lecturer Administration Portal")
+    st.title("🔒 Lecturer Administration Portal")
     
-    # Password protection layer before showing your custom interface
-    password_input = st.text_input("Enter Lecturer Access Code:", type="password")
+    # Password validation checkpoint
+    password_input = st.text_input("Enter Access Verification Key Code:", type="password")
     
     if password_input == st.secrets.get("ADMIN_PASSWORD", "Brunei9489"):
-        st.success("Access Granted.")
+        st.success("Verification Clearance Verified.")
         st.markdown("---")
         
-        # Exact matching header text from your image_3662e0.png layout
-        st.subheader("📥 History Reference Log Entry")
+        # Mirroring your visual drawing elements exactly
+        st.header("📥 History Reference Log Entry")
         st.write("Incorporate text files, notes, or assignment worksheet variables directly into the cohort backend.")
         
-        # Your exact drawn-up interface form layout
-        with st.form("lecturer_log_form", clear_on_submit=True):
+        with st.form("lecturer_input_form", clear_on_submit=True):
             col_left, col_right = st.columns([3, 2])
             
             with col_left:
-                component_option = st.selectbox(
-                    "Select Component Option:",
-                    [
-                        "Modern Europe (1750–1921)", 
-                        "International Options (1870–1945)", 
-                        "History of the USA (1840–1980)",
-                        "Historical Interpretations"
-                    ]
-                )
+                input_component = st.selectbox("Select Component Option:", list(SYLLABUS_OPTIONS.keys()))
                 
-                subject_topic = st.selectbox(
-                    "Select Core Subject Topic:",
-                    [
-                        "France, 1774–1814",
-                        "The Industrial Revolution, c. 1750–1850",
-                        "The League of Nations and International Relations",
-                        "The Origins of the Cold War",
-                        "Other Specified Topic Syllabus Block"
-                    ]
-                )
+                # Dynamically maps subject choices to match whatever component is highlighted
+                input_subtopic = st.selectbox("Select Core Subject Topic:", SYLLABUS_OPTIONS[input_component])
                 
-                material_type = st.selectbox(
-                    "Select Material Type Parameters:",
-                    [
-                        "References to selected Topic (pdf)",
-                        "Assignment Worksheet (Doc/Forms)",
-                        "Primary Source Material Context",
-                        "Lecture Slides / Overview Notes"
-                    ]
-                )
+                input_mat_type = st.selectbox("Select Material Type Parameters:", MATERIAL_TYPES)
             
             with col_right:
                 resource_description = st.text_area(
@@ -115,7 +173,7 @@ with tab_lecturer:
                     height=220
                 )
             
-            # Full width input matching the target web link field
+            # Full width input matching your target web link text bar design
             resource_url = st.text_input(
                 "Resource URL Target Web Link:",
                 placeholder="https://drive.google.com/file/d/..."
@@ -123,22 +181,23 @@ with tab_lecturer:
             
             st.markdown("<br>", unsafe_allow_html=True)
             
-            # Action button customized to mirror your layout exactly
+            # Form commit execution button
             submit_btn = st.form_submit_button("⚡ Append Reference Parameters to Database", use_container_width=True)
             
             if submit_btn:
                 if resource_url and resource_description:
                     if gc:
                         try:
+                            # Targets your Google Sheet asset database
                             sheet = gc.open("PTES History 9489 Database").sheet1
-                            sheet.append_row([component_option, subject_topic, material_type, resource_description, resource_url])
-                            st.success("Successfully logged parameter references to the data repository!")
+                            sheet.append_row([input_component, input_subtopic, input_mat_type, resource_description, resource_url])
+                            st.success("Successfully logged database parameter references into the cloud repository system!")
                         except Exception as e:
-                            st.error(f"Failed to record information to spreadsheet backend: {e}")
+                            st.error(f"Failed to record cell details to active Google Spreadsheet: {e}")
                     else:
-                        st.error("Database cloud link status is offline.")
+                        st.error("Database Connection Status Error: Cloud authorization engine is offline. Please check your config keys.")
                 else:
-                    st.warning("Please provide both a clear text context description and a functional target web link URL.")
+                    st.warning("Action Cancelled: Make sure both the description field and target link text strings are filled out.")
                     
     elif password_input != "":
-        st.error("Incorrect Lecturer Code. Access Denied.")
+        st.error("Access Code Incorrect. Verification Failure.")
