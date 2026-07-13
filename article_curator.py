@@ -21,7 +21,7 @@ SYLLABUS_OPTIONS = {
         "Liberalism and nationalism in Germany",
         "The Russian Revolution"
     ],
-    "The Origins & Developments of the Cold War": [
+    "The Origin & Development of Cold War": [
         "Origins of the Cold War",
         "Historian Interpretation",
         "Dictatorship Rule"
