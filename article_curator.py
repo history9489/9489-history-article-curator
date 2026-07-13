@@ -11,10 +11,9 @@ st.set_page_config(
 )
 
 # --- CONFIGURATION VARIABLES ---
-# CLEAN RAW DATA URL MATCHED TO YOUR SHEET ID PERFECTLY
-GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1Kckp2mug8-bUlGroArM5bM9guK2jmt2w9XAfQPKuIl4/export?format=csv"
-GOOGLE_FORM_SUBMIT_URL = "https://docs.google.com/forms/d/e/YOUR_FORM_ID/viewform" 
-
+# https://docs.google.com/spreadsheets/d/1Kckp2mug8-bUlGroArM5bM9guK2jmt2w9XAfQPKuIl4/edit?gid=0#gid=0
+# CLEAN RAW DATA URL POINTING DIRECTLY TO SHEET 1
+GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1Kckp2mug8-bUlGroArM5bM9guK2jmt2w9XAfQPKuIl4/export?format=csv&gid=0"
 # --- SYLLABUS DATA STRUCTURE ---
 SYLLABUS_OPTIONS = {
     "Modern Europe (1750–1921)": [
