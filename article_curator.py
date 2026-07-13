@@ -4,7 +4,7 @@ import urllib.parse
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
-    page_title="PTES 9489 History Case Studies",
+    page_title="PTES 9489 History Library",
     page_icon="📚",
     layout="wide"
 )
@@ -21,16 +21,18 @@ SYLLABUS_OPTIONS = {
         "Liberalism and nationalism in Germany",
         "The Russian Revolution"
     ],
-    "History of the USA (1820–1941)": [
-        "Origins of the Civil War",
-        "Civil War and Reconstruction",
-        "The Gilded Age and Progressive Era",
-        "The Great Crash and New Deal"
+    "The Origins & Developments of the Cold War": [
+        "Origins of the Cold War",
+        "Historian Interpretation",
+        "Dictatorship Rule"
     ],
-    "International History (1870–1945)": [
-        "Empire and emergence of world powers",
-        "The League of Nations and international relations",
-        "China and Japan 1912-45"
+    "Stalin Russia (1924-1941)": [
+        "Stalin's Rise To Power",
+        "Dictatorship Rule"
+    ],
+    "Hitler's Germany (1929-1941)" [
+        "Hitler's Rise To Power",
+        "Dictatorship Rule"
     ]
 }
 
@@ -60,13 +62,13 @@ def fetch_open_access_articles(query):
     return articles
 
 # --- UI LAYOUT ---
-st.title("📚 History Materials")
+st.title("📚 PTES 9489 History Library")
 st.write("Select your topic category to gather online readings and worksheets.")
 
 # Sidebar Configuration
 st.sidebar.header("📋 Syllabus Filter")
 selected_component = st.sidebar.selectbox("Select Component Option", list(SYLLABUS_OPTIONS.keys()))
-selected_subtopic = st.sidebar.selectbox("Select Core Subject Topic", SYLLABUS_OPTIONS[selected_component])
+selected_subtopic = st .sidebar.selectbox("Select Core Subject Topic", SYLLABUS_OPTIONS[selected_component])
 
 # Main Free-text search fallback override
 st.subheader("🔍 Refine Search Query")
