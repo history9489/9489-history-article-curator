@@ -30,7 +30,7 @@ def init_connection():
 
 gc = init_connection()
 
-# --- 3. GLOBAL SYLLABUS DATA STRUCTURE ---
+# --- 3. GLOBAL SYLLABUS DATA STRUCTURE (STUDENT DISCOVERY) ---
 SYLLABUS_OPTIONS = {
     "Modern Europe (1750–1921)": [
         "France, 1774–1814",
@@ -53,11 +53,30 @@ SYLLABUS_OPTIONS = {
     ]
 }
 
-MATERIAL_TYPES = [
+# --- UNIFIED LECTURER COMBINED PARAMETERS (11 DEFINITE OPTIONS) ---
+LECTURER_COMBINED_TOPICS = [
+    "Modern Europe, France (1774–1814)",
+    "Modern Europe, Britain Industrial Revolution",
+    "Modern Europe, Germany Liberalism & Nationalism",
+    "Modern Europe, Russian Revolution",
+    "Cold War, Origin of Cold War",
+    "Cold War, Historian Interpretation",
+    "Stalin Russia, Rise to Power",
+    "Stalin Russia, Dictatorship Rules",
+    "Hitler Germany, Rise to Power",
+    "Hitler Germany, Dictatorship Rules",
+    "Other Additional Materials"
+]
+
+# --- PARAMETER BAR 3: MATERIAL TYPES CRITERIA ---
+MATERIAL_TYPES_CRITERIA = [
     "References to selected Topic (pdf)",
     "Assignment Worksheet (Doc/Forms)",
     "Primary Source Material Context",
-    "Lecture Slides / Overview Notes"
+    "Lecture Slides / Overview Notes",
+    "Quiz Form",
+    "URL Links to Worksheets",
+    "URL to Slides and Video"
 ]
 
 # --- 4. HELPER FUNCTIONS FOR LIVE APIS ---
@@ -83,13 +102,13 @@ def fetch_open_access_articles(query):
 tab_students, tab_lecturer = st.tabs(["🎓 Student Discovery Hub", "🔒 Lecturer Reference Log Entry"])
 
 # ==========================================
-#   TAB 1: STUDENT DISCOVERY HUB
+#   TAB 1: STUDENT DISCOVERY HUB (ORIGINAL)
 # ==========================================
 with tab_students:
     st.title("📚 PTES 9489 History Library")
     st.write("Select your topic category to gather online readings and worksheets.")
 
-    # Sidebar Filter Components (With Explicit Keys to Avoid Collisions)
+    # Sidebar Filters remain active for students' easy structured exploration
     st.sidebar.header("📋 Syllabus Filter")
     selected_component = st.sidebar.selectbox(
         "Select Component Option", 
@@ -140,7 +159,7 @@ with tab_students:
         """)
 
 # ==========================================
-#   TAB 2: LECTURER PORTAL (FIXED ALIGNMENT)
+#   TAB 2: LECTURER PORTAL (NEW SIMPLIFIED SINGLE-SELECT LAYOUT)
 # ==========================================
 with tab_lecturer:
     st.title("🔒 Lecturer Administration Portal")
@@ -151,60 +170,60 @@ with tab_lecturer:
         st.markdown("---")
         
         st.header("📥 History Reference Log Entry")
-        st.write("Incorporate text files, notes, or assignment worksheet variables directly into the cohort backend.")
+        st.write("Publish reference worksheets, context slides, and quiz links into the cohort library database.")
         
-        with st.form("lecturer_input_form", clear_on_submit=True):
+        with st.form("lecturer_unified_form", clear_on_submit=True):
             col_left, col_right = st.columns([3, 2])
             
             with col_left:
-                # Unique Key 'lecturer_component' keeps this isolated from the sidebar selectbox
-                input_component = st.selectbox(
-                    "Select Component Option:", 
-                    list(SYLLABUS_OPTIONS.keys()), 
-                    key="lecturer_component"
+                # Parameter Bar 1: Combined 11 definite choices
+                unified_topic = st.selectbox(
+                    "Parameter Bar 1: Select Syllabus Component & Core Subject:",
+                    LECTURER_COMBINED_TOPICS,
+                    key="lecturer_combined_topic"
                 )
                 
-                # Unique Key 'lecturer_subtopic' ensures correct list updates
-                input_subtopic = st.selectbox(
-                    "Select Core Subject Topic:", 
-                    SYLLABUS_OPTIONS[input_component], 
-                    key="lecturer_subtopic"
-                )
-                
-                input_mat_type = st.selectbox(
-                    "Select Material Type Parameters:", 
-                    MATERIAL_TYPES, 
-                    key="lecturer_mat_type"
+                # Parameter Bar 3: Expanded Material Criteria List
+                material_criteria = st.selectbox(
+                    "Parameter Bar 3: Select Material Type / Criteria:",
+                    MATERIAL_TYPES_CRITERIA,
+                    key="lecturer_material_criteria"
                 )
             
             with col_right:
+                # Parameter Bar 2: Context Description
                 resource_description = st.text_area(
-                    "Resource Description Parameter:",
-                    placeholder="Type clear descriptive context here...",
-                    height=220
+                    "Parameter Bar 2: Resource Description context Parameter:",
+                    placeholder="Type descriptive instructions, details or guidelines here...",
+                    height=155,
+                    key="lecturer_description"
                 )
             
+            # File URL Link Target web row
             resource_url = st.text_input(
-                "Resource URL Target Web Link:",
-                placeholder="https://drive.google.com/file/d/..."
+                "Parameter Bar 4: Material Document URL Link (Google Drive, Quizizz, Web Link):",
+                placeholder="https://drive.google.com/file/d/... or https://quizizz.com/..."
             )
             
             st.markdown("<br>", unsafe_allow_html=True)
+            
+            # Form submission button
             submit_btn = st.form_submit_button("⚡ Append Reference Parameters to Database", use_container_width=True)
             
             if submit_btn:
                 if resource_url and resource_description:
                     if gc:
                         try:
+                            # Safely write the merged parameters to your Google Sheet database
                             sheet = gc.open("PTES History 9489 Database").sheet1
-                            sheet.append_row([input_component, input_subtopic, input_mat_type, resource_description, resource_url])
-                            st.success("Successfully logged database parameter references into the cloud repository system!")
+                            sheet.append_row([unified_topic, material_criteria, resource_description, resource_url])
+                            st.success("Successfully logged unified reference details to the Google Sheet backend!")
                         except Exception as e:
-                            st.error(f"Failed to record information: {e}")
+                            st.error(f"Failed to append row parameters: {e}")
                     else:
-                        st.error("Database Connection Status Error: Cloud authorization engine is offline.")
+                        st.error("Database connection is offline. Verify your Cloud Secrets keys.")
                 else:
-                    st.warning("Action Cancelled: Make sure both description and target links are filled out.")
+                    st.warning("Ensure that both the Resource Description and target Document URL Link fields are fully filled.")
                     
     elif password_input != "":
         st.error("Access Code Incorrect. Verification Failure.")
