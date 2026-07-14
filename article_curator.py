@@ -30,7 +30,7 @@ def init_connection():
 
 gc = init_connection()
 
-# --- 3. GLOBAL SYLLABUS DATA STRUCTURE (STUDENT DISCOVERY) ---
+# --- 3. GLOBAL SYLLABUS DATA STRUCTURE ---
 SYLLABUS_OPTIONS = {
     "Modern Europe (1750–1921)": [
         "France, 1774–1814",
@@ -53,22 +53,21 @@ SYLLABUS_OPTIONS = {
     ]
 }
 
-# --- UNIFIED LECTURER COMBINED PARAMETERS (11 DEFINITE OPTIONS) ---
+# Unified choices using comma delimiters for easy split remapping
 LECTURER_COMBINED_TOPICS = [
-    "Modern Europe, France (1774–1814)",
-    "Modern Europe, Britain Industrial Revolution",
-    "Modern Europe, Germany Liberalism & Nationalism",
-    "Modern Europe, Russian Revolution",
-    "Cold War, Origin of Cold War",
-    "Cold War, Historian Interpretation",
-    "Stalin Russia, Rise to Power",
-    "Stalin Russia, Dictatorship Rules",
-    "Hitler Germany, Rise to Power",
-    "Hitler Germany, Dictatorship Rules",
-    "Other Additional Materials"
+    "Modern Europe (1750–1921), France (1774–1814)",
+    "Modern Europe (1750–1921), Britain Industrial Revolution",
+    "Modern Europe (1750–1921), Germany Liberalism & Nationalism",
+    "Modern Europe (1750–1921), Russian Revolution",
+    "The Origin & Development of Cold War, Origin of Cold War",
+    "The Origin & Development of Cold War, Historian Interpretation",
+    "Stalin Russia (1924-1941), Rise to Power",
+    "Stalin Russia (1924-1941), Dictatorship Rules",
+    "Hitler's Germany (1929-1941), Rise to Power",
+    "Hitler's Germany (1929-1941), Dictatorship Rules",
+    "Other, Additional Materials"
 ]
 
-# --- PARAMETER BAR 3: MATERIAL TYPES CRITERIA ---
 MATERIAL_TYPES_CRITERIA = [
     "References to selected Topic (pdf)",
     "Assignment Worksheet (Doc/Forms)",
@@ -98,28 +97,19 @@ def fetch_open_access_articles(query):
         st.error(f"Error fetching articles: {e}")
     return articles
 
-# --- 5. UNIFIED INTERFACE STRUCTURE (TABS) ---
+# --- 5. UNIFIED INTERFACE STRUCTURE ---
 tab_students, tab_lecturer = st.tabs(["🎓 Student Discovery Hub", "🔒 Lecturer Reference Log Entry"])
 
 # ==========================================
-#   TAB 1: STUDENT DISCOVERY HUB (ORIGINAL)
+#   TAB 1: STUDENT DISCOVERY HUB
 # ==========================================
 with tab_students:
     st.title("📚 PTES 9489 History Library")
     st.write("Select your topic category to gather online readings and worksheets.")
 
-    # Sidebar Filters remain active for students' easy structured exploration
     st.sidebar.header("📋 Syllabus Filter")
-    selected_component = st.sidebar.selectbox(
-        "Select Component Option", 
-        list(SYLLABUS_OPTIONS.keys()), 
-        key="student_component"
-    )
-    selected_subtopic = st.sidebar.selectbox(
-        "Select Core Subject Topic", 
-        SYLLABUS_OPTIONS[selected_component], 
-        key="student_subtopic"
-    )
+    selected_component = st.sidebar.selectbox("Select Component Option", list(SYLLABUS_OPTIONS.keys()), key="student_component")
+    selected_subtopic = st.sidebar.selectbox("Select Core Subject Topic", SYLLABUS_OPTIONS[selected_component], key="student_subtopic")
 
     st.subheader("🔍 Refine Search Query")
     search_keyword = st.text_input("Modify keywords to fine-tune your resource matching:", value=selected_subtopic)
@@ -159,13 +149,15 @@ with tab_students:
         """)
 
 # ==========================================
-#   TAB 2: LECTURER PORTAL (NEW SIMPLIFIED SINGLE-SELECT LAYOUT)
+#   TAB 2: LECTURER PORTAL (SECURED & RESTOCKED FIELDS)
 # ==========================================
 with tab_lecturer:
     st.title("🔒 Lecturer Administration Portal")
+    
+    # SECURITY FIX: Completely removed the default visible password string parameter
     password_input = st.text_input("Enter Access Verification Key Code:", type="password")
     
-    if password_input == st.secrets.get("ADMIN_PASSWORD", "Brunei9489"):
+    if password_input and password_input == st.secrets.get("ADMIN_PASSWORD"):
         st.success("Verification Clearance Verified.")
         st.markdown("---")
         
@@ -176,22 +168,19 @@ with tab_lecturer:
             col_left, col_right = st.columns([3, 2])
             
             with col_left:
-                # Parameter Bar 1: Combined 11 definite choices
                 unified_topic = st.selectbox(
                     "Parameter Bar 1: Select Syllabus Component & Core Subject:",
                     LECTURER_COMBINED_TOPICS,
                     key="lecturer_combined_topic"
                 )
                 
-                # Parameter Bar 3: Expanded Material Criteria List
                 material_criteria = st.selectbox(
-                    "Parameter Bar 3: Select Material Type / Criteria:",
+                    "Parameter Bar 3: Select Material Type / Criteria (Resource Name):",
                     MATERIAL_TYPES_CRITERIA,
                     key="lecturer_material_criteria"
                 )
             
             with col_right:
-                # Parameter Bar 2: Context Description
                 resource_description = st.text_area(
                     "Parameter Bar 2: Resource Description context Parameter:",
                     placeholder="Type descriptive instructions, details or guidelines here...",
@@ -199,31 +188,43 @@ with tab_lecturer:
                     key="lecturer_description"
                 )
             
-            # File URL Link Target web row
             resource_url = st.text_input(
-                "Parameter Bar 4: Material Document URL Link (Google Drive, Quizizz, Web Link):",
-                placeholder="https://drive.google.com/file/d/... or https://quizizz.com/..."
+                "Parameter Bar 4: Material Document URL Link (The URL Link):",
+                placeholder="https://drive.google.com/file/d/..."
             )
             
             st.markdown("<br>", unsafe_allow_html=True)
-            
-            # Form submission button
             submit_btn = st.form_submit_button("⚡ Append Reference Parameters to Database", use_container_width=True)
             
             if submit_btn:
                 if resource_url and resource_description:
                     if gc:
                         try:
-                            # Safely write the merged parameters to your Google Sheet database
+                            # DATABASE HEADERS MATCHING LOGIC:
+                            # Splits "Modern Europe, France" into: component="Modern Europe", topic="France"
+                            if ", " in unified_topic:
+                                comp_part, topic_part = unified_topic.split(", ", 1)
+                            else:
+                                comp_part, topic_part = unified_topic, "General / Unified"
+                            
+                            # Row array maps to exactly match columns: A, B, C, D, E
+                            row_to_append = [
+                                comp_part,           # Column A: Component
+                                topic_part,          # Column B: Topic
+                                material_criteria,   # Column C: Resource Name
+                                resource_url,        # Column D: The URL Link
+                                resource_description # Column E: Description
+                            ]
+                            
                             sheet = gc.open("PTES History 9489 Database").sheet1
-                            sheet.append_row([unified_topic, material_criteria, resource_description, resource_url])
-                            st.success("Successfully logged unified reference details to the Google Sheet backend!")
+                            sheet.append_row(row_to_append)
+                            st.success("Successfully logged aligned parameters into your Google Sheet backend columns!")
                         except Exception as e:
                             st.error(f"Failed to append row parameters: {e}")
                     else:
                         st.error("Database connection is offline. Verify your Cloud Secrets keys.")
                 else:
-                    st.warning("Ensure that both the Resource Description and target Document URL Link fields are fully filled.")
+                    st.warning("Ensure that both Description and Document URL Link fields are fully filled.")
                     
     elif password_input != "":
         st.error("Access Code Incorrect. Verification Failure.")
