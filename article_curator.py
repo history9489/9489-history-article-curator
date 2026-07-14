@@ -30,42 +30,20 @@ def init_connection():
 
 gc = init_connection()
 
-# --- 3. GLOBAL SYLLABUS DATA STRUCTURE ---
-SYLLABUS_OPTIONS = {
-    "Modern Europe (1750–1921)": [
-        "France, 1774–1814",
-        "Industrial Revolution in Britain",
-        "Liberalism and nationalism in Germany",
-        "The Russian Revolution"
-    ],
-    "The Origin & Development of Cold War": [
-        "Origins of the Cold War",
-        "Historian Interpretation",
-        "Dictatorship Rule"
-    ],
-    "Stalin Russia (1924-1941)": [
-        "Stalin's Rise To Power",
-        "Dictatorship Rule"
-    ],
-    "Hitler's Germany (1929-1941)": [
-        "Hitler's Rise To Power",
-        "Dictatorship Rule"
-    ]
-}
-
-# Unified choices using comma delimiters for easy split remapping
-LECTURER_COMBINED_TOPICS = [
-    "Modern Europe (1750–1921), France (1774–1814)",
-    "Modern Europe (1750–1921), Britain Industrial Revolution",
-    "Modern Europe (1750–1921), Germany Liberalism & Nationalism",
-    "Modern Europe (1750–1921), Russian Revolution",
-    "The Origin & Development of Cold War, Origin of Cold War",
-    "The Origin & Development of Cold War, Historian Interpretation",
-    "Stalin Russia (1924-1941), Rise to Power",
-    "Stalin Russia (1924-1941), Dictatorship Rules",
-    "Hitler's Germany (1929-1941), Rise to Power",
+# --- 3. UNIFIED GLOBAL 11-OPTION TOPICS MATRIX ---
+# Shared completely between both Tab 1 and Tab 2 to prevent any mapping confusion
+UNIFIED_HISTORY_TOPICS = [
+    "Modern Europe (1750–1921), The France (1774–1814)",
+    "Modern Europe (1750–1921), The Britain Industrial Revolution",
+    "Modern Europe (1750–1921), The Germany Liberalism & Nationalism",
+    "Modern Europe (1750–1921), The Russian Revolution",
+    "The Origin & Development of Cold War",
+    "The Historian Interpretation of Cold War",
+    "Stalin's Russia (1924-1941), Rise to power",
+    "Stalin's Russia (1924-1941), Dictatorship Rules",
+    "Hitler's Germany (1929-1941), Rise to power",
     "Hitler's Germany (1929-1941), Dictatorship Rules",
-    "Other, Additional Materials"
+    "Other Additional Materials"
 ]
 
 MATERIAL_TYPES_CRITERIA = [
@@ -97,22 +75,35 @@ def fetch_open_access_articles(query):
         st.error(f"Error fetching articles: {e}")
     return articles
 
-# --- 5. UNIFIED INTERFACE STRUCTURE ---
+# --- 5. UNIFIED INTERFACE STRUCTURE (TABS ONLY, NO SIDEBAR) ---
 tab_students, tab_lecturer = st.tabs(["🎓 Student Discovery Hub", "🔒 Lecturer Reference Log Entry"])
 
 # ==========================================
-#   TAB 1: STUDENT DISCOVERY HUB
+#   TAB 1: STUDENT DISCOVERY HUB (MAIN INTERFACE MERGE)
 # ==========================================
 with tab_students:
     st.title("📚 PTES 9489 History Library")
-    st.write("Select your topic category to gather online readings and worksheets.")
+    st.write("Gather open-access historical data and resources matching your Cambridge 9489 syllabus parameters.")
 
-    st.sidebar.header("📋 Syllabus Filter")
-    selected_component = st.sidebar.selectbox("Select Component Option", list(SYLLABUS_OPTIONS.keys()), key="student_component")
-    selected_subtopic = st.sidebar.selectbox("Select Core Subject Topic", SYLLABUS_OPTIONS[selected_component], key="student_subtopic")
+    # Main dashboard selection using your explicit 11 options
+    selected_student_topic = st.selectbox(
+        "Select Syllabus Component & Topic Focus:",
+        UNIFIED_HISTORY_TOPICS,
+        key="student_unified_select"
+    )
+
+    # Automatically extract a clean keyword for the live API query
+    if ", " in selected_student_topic:
+        api_search_keyword = selected_student_topic.split(", ", 1)[1]
+    else:
+        api_search_keyword = selected_student_topic
 
     st.subheader("🔍 Refine Search Query")
-    search_keyword = st.text_input("Modify keywords to fine-tune your resource matching:", value=selected_subtopic)
+    search_keyword = st.text_input(
+        "Modify keywords to fine-tune your live API resource matching:", 
+        value=api_search_keyword,
+        key="student_keyword_input"
+    )
 
     col1, col2 = st.columns(2)
     with col1:
@@ -149,16 +140,16 @@ with tab_students:
         """)
 
 # ==========================================
-#   TAB 2: LECTURER PORTAL (SECURED & RESTOCKED FIELDS)
+#   TAB 2: LECTURER PORTAL (SECURED & CLEAN MATCHING)
 # ==========================================
 with tab_lecturer:
     st.title("🔒 Lecturer Administration Portal")
     
-    # SECURITY FIX: Completely removed the default visible password string parameter
+    # Securely queries your deployment panel secrets directly
     password_input = st.text_input("Enter Access Verification Key Code:", type="password")
     
     if password_input and password_input == st.secrets.get("ADMIN_PASSWORD"):
-        st.success("Verification Clearance Verified.")
+        st.success("Verification Access Granted.")
         st.markdown("---")
         
         st.header("📥 History Reference Log Entry")
@@ -168,46 +159,50 @@ with tab_lecturer:
             col_left, col_right = st.columns([3, 2])
             
             with col_left:
+                # Parameter Bar 1: Uses the identical 11 choices matching Tab 1
                 unified_topic = st.selectbox(
-                    "Parameter Bar 1: Select Syllabus Component & Core Subject:",
-                    LECTURER_COMBINED_TOPICS,
+                    "Select Syllabus Component & Core Subject:",
+                    UNIFIED_HISTORY_TOPICS,
                     key="lecturer_combined_topic"
                 )
                 
+                # Parameter Bar 3: Material criteria dropdown
                 material_criteria = st.selectbox(
-                    "Parameter Bar 3: Select Material Type / Criteria (Resource Name):",
+                    "Select Material Type / Criteria (Resource Name):",
                     MATERIAL_TYPES_CRITERIA,
                     key="lecturer_material_criteria"
                 )
             
             with col_right:
+                # Parameter Bar 2: Context Description box
                 resource_description = st.text_area(
-                    "Parameter Bar 2: Resource Description context Parameter:",
+                    "Resource Description context Entry:",
                     placeholder="Type descriptive instructions, details or guidelines here...",
                     height=155,
                     key="lecturer_description"
                 )
             
+            # Parameter Bar 4: Link target text field
             resource_url = st.text_input(
-                "Parameter Bar 4: Material Document URL Link (The URL Link):",
-                placeholder="https://drive.google.com/file/d/..."
+                "State the material document or URL Link:",
+                placeholder="https://drive.google.com/file/d/... or https://quizizz.com/..."
             )
             
             st.markdown("<br>", unsafe_allow_html=True)
-            submit_btn = st.form_submit_button("⚡ Append Reference Parameters to Database", use_container_width=True)
+            submit_btn = st.form_submit_button("⚡ UPLOAD References append to Database", use_container_width=True)
             
             if submit_btn:
                 if resource_url and resource_description:
                     if gc:
                         try:
-                            # DATABASE HEADERS MATCHING LOGIC:
-                            # Splits "Modern Europe, France" into: component="Modern Europe", topic="France"
+                            # DATABASE HEADERS ALIGNMENT LOGIC:
+                            # Intelligently splits the single string choice to fit Column A and Column B
                             if ", " in unified_topic:
                                 comp_part, topic_part = unified_topic.split(", ", 1)
                             else:
-                                comp_part, topic_part = unified_topic, "General / Unified"
+                                comp_part, topic_part = "General / Additional", unified_topic
                             
-                            # Row array maps to exactly match columns: A, B, C, D, E
+                            # Maps cleanly across Column A, B, C, D, E of your worksheet database
                             row_to_append = [
                                 comp_part,           # Column A: Component
                                 topic_part,          # Column B: Topic
