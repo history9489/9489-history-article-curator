@@ -15,10 +15,8 @@ st.set_page_config(
 @st.cache_resource
 def init_connection():
     try:
-        # Pulls the secret data directly from the [gspread_creds] block in your Streamlit panel
         creds_dict = dict(st.secrets["gspread_creds"])
         if "private_key" in creds_dict:
-            # Replaces text line breaks into real system code newlines safely in memory
             creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
             
         scopes = [
@@ -28,7 +26,6 @@ def init_connection():
         credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
         return gspread.authorize(credentials)
     except Exception as e:
-        # Instead of crashing the whole page, we display a soft error warning inside the admin tab
         return None
 
 gc = init_connection()
@@ -86,22 +83,28 @@ def fetch_open_access_articles(query):
 tab_students, tab_lecturer = st.tabs(["🎓 Student Discovery Hub", "🔒 Lecturer Reference Log Entry"])
 
 # ==========================================
-#   TAB 1: STUDENT DISCOVERY HUB (YOUR ORIGINAL ENVIRONMENT)
+#   TAB 1: STUDENT DISCOVERY HUB
 # ==========================================
 with tab_students:
     st.title("📚 PTES 9489 History Library")
     st.write("Select your topic category to gather online readings and worksheets.")
 
-    # Sidebar Filter Components (Perfectly Restored)
+    # Sidebar Filter Components (With Explicit Keys to Avoid Collisions)
     st.sidebar.header("📋 Syllabus Filter")
-    selected_component = st.sidebar.selectbox("Select Component Option", list(SYLLABUS_OPTIONS.keys()))
-    selected_subtopic = st.sidebar.selectbox("Select Core Subject Topic", SYLLABUS_OPTIONS[selected_component])
+    selected_component = st.sidebar.selectbox(
+        "Select Component Option", 
+        list(SYLLABUS_OPTIONS.keys()), 
+        key="student_component"
+    )
+    selected_subtopic = st.sidebar.selectbox(
+        "Select Core Subject Topic", 
+        SYLLABUS_OPTIONS[selected_component], 
+        key="student_subtopic"
+    )
 
-    # Main search keyword block
     st.subheader("🔍 Refine Search Query")
     search_keyword = st.text_input("Modify keywords to fine-tune your resource matching:", value=selected_subtopic)
 
-    # Action Buttons
     col1, col2 = st.columns(2)
     with col1:
         search_articles = st.button("🚀 Fetch Syllabus Articles", use_container_width=True)
@@ -110,7 +113,6 @@ with tab_students:
 
     st.markdown("---")
 
-    # Display Query Results
     if search_articles:
         st.subheader(f"📖 Academic Materials for: *{search_keyword}*")
         with st.spinner("Scanning open archives..."):
@@ -123,7 +125,7 @@ with tab_students:
                         st.markdown(f"[🔗 Read Full Article]({article['link']})")
                         st.markdown("---")
             else:
-                st.warning("No open-access summaries matching this precise subtopic were found. Try modifying the keywords above.")
+                st.warning("No open-access summaries matching this precise subtopic were found.")
 
     if search_worksheets:
         st.subheader(f"🧩 Target Worksheets for: *{search_keyword}*")
@@ -136,22 +138,18 @@ with tab_students:
         * 👉 [Search Open Source PDF Worksheets & Handouts via DuckDuckGo]({ddg_search_url})
         * 👉 [Check for Interactive Live Revision Quizzes on Quizizz]({quizizz_url})
         """)
-        st.caption("Note: Worksheets are fetched externally from educational resource domains.")
 
 # ==========================================
-#   TAB 2: LECTURER ENVIRONMENT (MATCHING YOUR DESIGNED LAYOUT)
+#   TAB 2: LECTURER PORTAL (FIXED ALIGNMENT)
 # ==========================================
 with tab_lecturer:
     st.title("🔒 Lecturer Administration Portal")
-    
-    # Password validation checkpoint
     password_input = st.text_input("Enter Access Verification Key Code:", type="password")
     
     if password_input == st.secrets.get("ADMIN_PASSWORD", "Brunei9489"):
         st.success("Verification Clearance Verified.")
         st.markdown("---")
         
-        # Mirroring your visual drawing elements exactly
         st.header("📥 History Reference Log Entry")
         st.write("Incorporate text files, notes, or assignment worksheet variables directly into the cohort backend.")
         
@@ -159,12 +157,25 @@ with tab_lecturer:
             col_left, col_right = st.columns([3, 2])
             
             with col_left:
-                input_component = st.selectbox("Select Component Option:", list(SYLLABUS_OPTIONS.keys()))
+                # Unique Key 'lecturer_component' keeps this isolated from the sidebar selectbox
+                input_component = st.selectbox(
+                    "Select Component Option:", 
+                    list(SYLLABUS_OPTIONS.keys()), 
+                    key="lecturer_component"
+                )
                 
-                # Dynamically maps subject choices to match whatever component is highlighted
-                input_subtopic = st.selectbox("Select Core Subject Topic:", SYLLABUS_OPTIONS[input_component])
+                # Unique Key 'lecturer_subtopic' ensures correct list updates
+                input_subtopic = st.selectbox(
+                    "Select Core Subject Topic:", 
+                    SYLLABUS_OPTIONS[input_component], 
+                    key="lecturer_subtopic"
+                )
                 
-                input_mat_type = st.selectbox("Select Material Type Parameters:", MATERIAL_TYPES)
+                input_mat_type = st.selectbox(
+                    "Select Material Type Parameters:", 
+                    MATERIAL_TYPES, 
+                    key="lecturer_mat_type"
+                )
             
             with col_right:
                 resource_description = st.text_area(
@@ -173,31 +184,27 @@ with tab_lecturer:
                     height=220
                 )
             
-            # Full width input matching your target web link text bar design
             resource_url = st.text_input(
                 "Resource URL Target Web Link:",
                 placeholder="https://drive.google.com/file/d/..."
             )
             
             st.markdown("<br>", unsafe_allow_html=True)
-            
-            # Form commit execution button
             submit_btn = st.form_submit_button("⚡ Append Reference Parameters to Database", use_container_width=True)
             
             if submit_btn:
                 if resource_url and resource_description:
                     if gc:
                         try:
-                            # Targets your Google Sheet asset database
                             sheet = gc.open("PTES History 9489 Database").sheet1
                             sheet.append_row([input_component, input_subtopic, input_mat_type, resource_description, resource_url])
                             st.success("Successfully logged database parameter references into the cloud repository system!")
                         except Exception as e:
-                            st.error(f"Failed to record cell details to active Google Spreadsheet: {e}")
+                            st.error(f"Failed to record information: {e}")
                     else:
-                        st.error("Database Connection Status Error: Cloud authorization engine is offline. Please check your config keys.")
+                        st.error("Database Connection Status Error: Cloud authorization engine is offline.")
                 else:
-                    st.warning("Action Cancelled: Make sure both the description field and target link text strings are filled out.")
+                    st.warning("Action Cancelled: Make sure both description and target links are filled out.")
                     
     elif password_input != "":
         st.error("Access Code Incorrect. Verification Failure.")
